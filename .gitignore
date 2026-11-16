@@ -19,4 +19,4 @@ vbstatic/VBStatic[0-9]*.bas
 vbextern/VBExtern[0-9]*.bas
 vbicon/VBIcon[0-9]*.bas
 vbmf/VBMF[0-9]*.bas
-link/Form[0-9]*.bas
+link/Form[0-9]*.frm
