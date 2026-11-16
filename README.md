@@ -17,9 +17,9 @@
 
 <p align="center">
   <a href="https://ultraalex00.github.io/VB6-LinkAlchemy/">Website</a> ·
+  <a href="https://discord.com/invite/4wrdDCxq97">Discord</a> ·
   <a href="../../releases/latest">Download Setup</a> ·
-  <a href="../../issues">Report a Bug</a>
-  <a href="https://discord.com/invite/4wrdDCxq97">Discord</a>
+  <a href="../../issues">Report a Bug</a> ·
 </p>
 
 ---
