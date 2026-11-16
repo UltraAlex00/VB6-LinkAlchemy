@@ -1,6 +1,4 @@
- text=auto eol=lf
-
-# vb6 shit
+# VB6 temp files
 *.vbw
 *.scc
 
@@ -12,13 +10,13 @@
 *.exe
 *.dll
 
-# test shit
+# test projects
 test app/
 test dll/
 
-# history
-vbstatic/VBStatic[0-9].bas
-vbextern/VBExtern[0-9].bas
-vbicon/VBIcon[0-9].bas
-vbmf/VBMF[0-9].bas
-link/Form[0-9].bas
+# backups
+vbstatic/VBStatic[0-9]*.bas
+vbextern/VBExtern[0-9]*.bas
+vbicon/VBIcon[0-9]*.bas
+vbmf/VBMF[0-9]*.bas
+link/Form[0-9]*.bas
