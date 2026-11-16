@@ -2,6 +2,7 @@ Type=Exe
 Module=modVBExtern; VBExtern.bas
 Startup="Sub Main"
 HelpFile=""
+Title="VBExtern"
 ExeName32="VBExtern.exe"
 Command32=""
 Name="VBExtern"
