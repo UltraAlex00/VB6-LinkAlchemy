@@ -99,11 +99,6 @@ The symbol is resolved against any OBJ or LIB you link in.
 
 Linking needs no default libraries: `/NODEFAULTLIB` with entry `_VBStaticEntry` for an EXE, or `_VBStaticDllEntry@12` for a DLL. The Linker's **Adjust link args** option sets this for you.
 
-## Settings
-
-- **Build configs** are stored in `vblinker.ini` in the folder of `main.obj`.
-- **Tool paths** are stored in `vblinker.ini` next to the Linker (in `VB98`). The Tools menu edits them.
-
 ## FAQ
 
 **Does my program still need `MSVBVM60.DLL`?**
@@ -124,10 +119,9 @@ More answers on the [project website](https://YOUR-USERNAME.github.io/REPO-NAME/
 
 | Folder | Contents |
 |---|---|
-| `link/` | The Linker (VB6 project) |
+| `link/` | The Linker Window |
 | `vbstatic/`, `vbmf/`, `vbicon/`, `vbextern/` | The patch tools |
 | `installer/` | NSIS installer script and assets |
-| `test app/`, `test dll/` | Sample projects for testing |
 | `docs/` | Project website (GitHub Pages) |
 
 ## License
