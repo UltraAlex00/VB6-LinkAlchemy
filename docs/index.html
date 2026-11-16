@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VB6 LinkAlchemy – standalone EXEs from Visual Basic 6</title>
+<meta name="description" content="Link VB6 projects into standalone executables: embed MSVBVM60.DLL, add manifests and icons, call external C symbols.">
+<link rel="icon" type="image/png" href="assets/logo.png">
+<style>
+:root{
+  --face:#c0c0c0; --hi:#fff; --lo:#808080; --dk:#000; --navy:#000080; --title2:#1084d0;
+  --desk:#008080; --ink:#000; --link:#0000ee; --paper:#fff; --pink:#ff55ff;
+  --ui:"Microsoft Sans Serif","MS Sans Serif",Tahoma,Verdana,Geneva,sans-serif;
+  --vb:"Courier New",Courier,monospace;
+  --mono:"Fixedsys","Lucida Console","Courier New",monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--desk)}
+body{margin:0;padding:20px 12px 60px;font:13px/1.5 var(--ui);color:var(--ink);background:var(--desk)}
+a{color:var(--link)}
+.wrap{max-width:900px;margin:0 auto;display:grid;gap:22px}
+/* raised / sunken */
+.raised{background:var(--face);border:2px solid;border-color:var(--hi) var(--dk) var(--dk) var(--hi);box-shadow:inset -1px -1px var(--lo),inset 1px 1px #dfdfdf}
+.sunken{background:var(--paper);border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);box-shadow:inset 1px 1px var(--dk),inset -1px -1px #dfdfdf}
+.win{background:var(--face);border:2px solid;border-color:var(--hi) var(--dk) var(--dk) var(--hi);box-shadow:inset -1px -1px var(--lo),inset 1px 1px #dfdfdf,4px 4px 0 rgba(0,0,0,.35);padding:3px}
+.title{display:flex;align-items:center;gap:6px;padding:3px 3px 3px 5px;color:#fff;font-weight:bold;background:linear-gradient(90deg,var(--navy),var(--title2))}
+.title img{width:16px;height:16px;image-rendering:pixelated}
+.title span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap{display:flex;gap:2px}
+.cap i{width:16px;height:14px;display:block;background:var(--face);border:1px solid;border-color:var(--hi) var(--dk) var(--dk) var(--hi);box-shadow:inset -1px -1px var(--lo);position:relative}
+.cap i::after{content:"";position:absolute;background:#000}
+.cap .m::after{left:3px;bottom:2px;width:6px;height:2px}
+.cap .x::after{left:3px;top:3px;width:7px;height:2px;transform:rotate(45deg);box-shadow:none}
+.cap .x::before{content:"";position:absolute;left:3px;top:3px;width:7px;height:2px;background:#000;transform:rotate(-45deg)}
+.body{padding:12px}
+/* menu bar */
+.menu{display:flex;flex-wrap:wrap;gap:2px;padding:2px 4px;border-bottom:1px solid var(--lo)}
+.menu a{color:var(--ink);text-decoration:none;padding:2px 8px}
+.menu a:hover,.menu a:focus-visible{background:var(--navy);color:#fff;outline:none}
+/* buttons */
+.btn{display:inline-block;min-width:96px;padding:5px 16px;text-align:center;font:inherit;color:var(--ink);text-decoration:none;background:var(--face);border:2px solid;border-color:var(--hi) var(--dk) var(--dk) var(--hi);box-shadow:inset -1px -1px var(--lo),inset 1px 1px #dfdfdf;cursor:pointer}
+.btn:active{border-color:var(--dk) var(--hi) var(--hi) var(--dk);box-shadow:inset 1px 1px var(--lo);padding:6px 15px 4px 17px}
+.btn:focus-visible,.tabs button:focus-visible{outline:1px dotted #000;outline-offset:-5px}
+.btn.def{outline:1px solid #000}
+.btn .ico{flex:none;display:block;width:32px;height:32px;margin:0 0 0 10px;image-rendering:pixelated}
+/* hero */
+.hero{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+.hero img{width:128px;height:128px;image-rendering:pixelated;background:var(--paper);padding:6px}
+h1{font:bold 30px/1.1 var(--ui);margin:0 0 8px;letter-spacing:-.5px}
+.hero p{margin:0 0 12px;max-width:60ch}
+.hero .row{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.hero .row .btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:6px 20px}
+.hero .row .btn:active{padding:7px 19px 5px 21px}
+/* form designer grid */
+.designer{background-color:var(--face);background-image:radial-gradient(#000 1px,transparent 1.2px);background-size:8px 8px;background-position:2px 2px}
+/* group box */
+fieldset{margin:0;padding:10px 12px;border:2px groove #fff;border-color:var(--hi) var(--lo) var(--lo) var(--hi);border-style:groove}
+legend{padding:0 4px}
+.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.feat label{display:flex;gap:8px;align-items:flex-start}
+.chk{flex:none;width:13px;height:13px;margin-top:3px;position:relative}
+.chk::after{content:"";position:absolute;left:3px;top:0;width:4px;height:8px;border:solid #000;border-width:0 2px 2px 0;transform:rotate(40deg)}
+.feat span>b:first-child{display:block}
+/* gallery */
+.gallery{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin:6px}
+.arrow{min-width:0;width:34px;height:56px;padding:0;display:flex;align-items:center;justify-content:center}
+.arrow:active{padding:0}
+.arrow:active i{transform:translate(1px,1px)}
+.arrow i{display:block;width:0;height:0;border:solid transparent}
+.arrow.prev i{border-width:8px 10px 8px 0;border-right-color:#000}
+.arrow.next i{border-width:8px 0 8px 10px;border-left-color:#000}
+.arrow:disabled{cursor:default}
+.arrow:disabled i{border-right-color:var(--lo);border-left-color:var(--lo);filter:drop-shadow(1px 1px 0 var(--hi))}
+.stage{position:relative;min-height:340px;padding:10px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.stage img.pic{display:block;max-width:100%;max-height:460px;height:auto;border:1px solid #000}
+.stage.loading img.pic,.stage.empty img.pic{visibility:hidden}
+.stage .msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px;text-align:center}
+.stage .msg[hidden]{display:none}
+.stage .drum{width:128px;height:128px;image-rendering:pixelated}
+/* window controls: close, minimise, disabled, taskbar */
+.menu a.ext{margin-left:auto}
+.menu a.off{color:var(--lo);text-shadow:1px 1px 0 var(--hi)}
+.menu a.off:hover,.menu a.off:focus-visible{color:#fff;text-shadow:none}
+.cap i[role=button]{cursor:pointer}
+.cap i[role=button]:active{border-color:var(--dk) var(--hi) var(--hi) var(--dk);box-shadow:inset 1px 1px var(--lo)}
+.cap i[role=button]:focus-visible{outline:1px dotted #000;outline-offset:-3px}
+.cap.dis i{cursor:default;pointer-events:none}
+.cap.dis i::after,.cap.dis i::before{background:var(--lo)}
+.win[data-state=closed],.win[data-state=min]{display:none}
+.win:focus{outline:none}
+.taskbar{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;flex-wrap:wrap;gap:3px;padding:4px 4px 4px;background:var(--face);border-top:2px solid var(--hi);box-shadow:0 -1px 0 var(--lo)}
+.taskbar[hidden]{display:none}
+.tb-btn{display:flex;align-items:center;gap:6px;width:170px;max-width:100%;height:28px;padding:0 8px;font:inherit;color:var(--ink);text-align:left;cursor:pointer;background:var(--face);border:2px solid;border-color:var(--hi) var(--dk) var(--dk) var(--hi);box-shadow:inset -1px -1px var(--lo),inset 1px 1px #dfdfdf}
+.tb-btn img{flex:none;width:16px;height:16px;image-rendering:pixelated}
+.tb-btn span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-btn:active{border-color:var(--dk) var(--hi) var(--hi) var(--dk);box-shadow:inset 1px 1px var(--lo)}
+.tb-btn:focus-visible{outline:1px dotted #000;outline-offset:-5px}
+/* lightbox */
+.stage img.pic{cursor:zoom-in}
+.lb{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,128,128,.78)}
+.lb[hidden]{display:none}
+.lb .win{display:flex;flex-direction:column;max-width:100%;max-height:100%}
+.lb .title{cursor:default}
+.lb .cap i{cursor:pointer}
+.lb-view{overflow:auto;margin:3px 0 0;padding:6px;min-height:0;display:flex;align-items:center;justify-content:center;max-height:calc(100vh - 110px)}
+.lb-view img{display:block;max-width:100%;max-height:calc(100vh - 130px);height:auto;border:1px solid #000;cursor:zoom-out}
+.lb-view.full{display:block}
+.lb-view.full img{max-width:none;max-height:none}
+.lb .status{margin-top:3px}
+/* tabs */
+.tabs{display:flex;gap:0;padding-left:6px;margin-bottom:-2px;position:relative;z-index:1;flex-wrap:wrap}
+.tabs button{font:inherit;padding:4px 14px;margin-top:2px;color:var(--ink);cursor:pointer;background:var(--face);border:2px solid;border-bottom:0;border-color:var(--hi) var(--dk) transparent var(--hi);box-shadow:inset -1px 0 var(--lo)}
+.tabs button[aria-selected=true]{margin-top:0;padding-top:6px;font-weight:bold}
+.panel{border:2px solid;border-color:var(--hi) var(--dk) var(--dk) var(--hi);box-shadow:inset -1px -1px var(--lo);padding:14px;min-height:200px}
+.panel[hidden]{display:none}
+.tabs button{display:inline-flex;align-items:center;gap:6px}
+.panel h2 img{image-rendering:pixelated}
+.panel h2{display:flex;align-items:center;gap:10px;font:bold 16px var(--ui);margin:0 0 6px}
+.panel p{margin:0 0 10px;max-width:70ch}
+pre{font-family:var(--vb)}
+code{font-family:var(--ui);font-weight:bold}
+code.vb{font-family:var(--vb),monospace;font-size:13px}
+pre{margin:8px 0;padding:8px 10px;overflow-x:auto;font-size:13px;line-height:1.45;white-space:pre}
+.cmt{color:#008000}.kw{color:#000080}.str{color:#800000}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 14px;margin:8px 0 0}
+dt{font-family:var(--ui);font-weight:bold}
+dd{margin:0}
+/* code window pipeline */
+.pipe{display:grid;gap:6px}
+.setup{display:grid;grid-template-columns:auto 1fr;gap:16px}
+.setup>img{width:96px;height:96px;image-rendering:pixelated;background:var(--paper);padding:6px;align-self:start}
+.setup-btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid var(--lo)}
+.console{margin:8px 0;padding:8px 10px;background:#000;color:#c0c0c0;font:12.5px/1.5 var(--mono);white-space:pre;overflow-x:auto;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo)}
+/* faq */
+.faq details{margin:0 0 4px}
+.faq summary{cursor:pointer;list-style:none;display:flex;gap:8px;align-items:flex-start;padding:3px 4px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::before{content:"+";flex:none;width:13px;height:13px;margin-top:2px;line-height:9px;text-align:center;font:bold 12px/11px var(--mono);background:#fff;border:1px solid var(--lo)}
+.faq details[open]>summary::before{content:"-"}
+.faq summary:hover,.faq summary:focus-visible{background:var(--navy);color:#fff;outline:none}
+.faq details>div{margin:2px 0 8px 25px;padding:8px 10px}
+.faq details>div p{margin:0 0 6px;max-width:70ch}.faq details>div p:last-child{margin:0}
+/* status bar */
+.status{display:flex;gap:3px;margin-top:3px;font-size:12px}
+.status span{padding:2px 8px;border:1px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);flex:1}
+.status span:first-child{flex:3}
+footer{color:#fff;text-align:center;font-size:12px}
+footer a{color:#fff}
+/* one orchestrated moment: the title bar of the hero window blinks active once */
+@keyframes boot{0%{filter:brightness(.6)}100%{filter:none}}
+.hero-win .title{animation:boot .6s steps(4) 1}
+@media (max-width:600px){.hero{grid-template-columns:1fr;text-align:left}.hero img{width:96px;height:96px}.setup{grid-template-columns:1fr}h1{font-size:24px}dl{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.hero-win .title{animation:none}}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<!-- HERO -->
+<section class="win hero-win" aria-labelledby="top">
+  <div class="title"><img src="assets/logo.png" alt=""><span>VB6 LinkAlchemy</span><div class="cap dis" title="This window can’t be minimized or closed" aria-hidden="true"><i class="m"></i><i class="x"></i></div></div>
+  <nav class="menu" id="winmenu" aria-label="Windows">
+    <a href="#features" data-win="features">What it does</a><a href="#gallery" data-win="gallery">Gallery</a><a href="#tools" data-win="tools">Tools</a><a href="#pipeline" data-win="pipeline">How a build runs</a><a href="#start" data-win="start">VB6 LinkAlchemy Setup</a><a href="#faq" data-win="faq">FAQ</a><a class="ext" href="https://github.com/YOUR-USER/VB6-LinkAlchemy">GitHub</a>
+  </nav>
+  <div class="body">
+    <div class="hero">
+      <img class="sunken" src="assets/logo.png" alt="VB6 LinkAlchemy logo: a document with a star and broken chain links">
+      <div>
+        <h1 id="top">VB6 LinkAlchemy</h1>
+        <p>Allows creation of <b>native</b> win32 apps in VB6 using a bunch of linking voodoo. Select what you need and press Compile to get a build that carries its own runtime (no more MSVBVM60.dll), a manifest, an icon ressource or native C code.</p>
+        <div class="row">
+          <a class="btn def" href="#start">Download Setup</a>
+          <a class="btn" href="https://github.com/YOUR-USER/VB6-LinkAlchemy">View source</a>
+          <a class="btn" href="#start">Report a Bug</a>
+          <a class="btn" href="#start">Join Discord<svg class="ico" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" shape-rendering="crispEdges" aria-hidden="true"><rect width="32" height="32" fill="#5865f2"/><rect x="10" y="7" width="3" height="1" fill="#fff"/><rect x="19" y="7" width="3" height="1" fill="#fff"/><rect x="8" y="8" width="16" height="1" fill="#fff"/><rect x="7" y="9" width="18" height="1" fill="#fff"/><rect x="6" y="10" width="20" height="1" fill="#fff"/><rect x="6" y="11" width="20" height="1" fill="#fff"/><rect x="5" y="12" width="22" height="1" fill="#fff"/><rect x="5" y="13" width="22" height="1" fill="#fff"/><rect x="5" y="14" width="22" height="1" fill="#fff"/><rect x="5" y="15" width="5" height="1" fill="#fff"/><rect x="14" y="15" width="4" height="1" fill="#fff"/><rect x="22" y="15" width="5" height="1" fill="#fff"/><rect x="4" y="16" width="6" height="1" fill="#fff"/><rect x="14" y="16" width="4" height="1" fill="#fff"/><rect x="22" y="16" width="6" height="1" fill="#fff"/><rect x="4" y="17" width="6" height="1" fill="#fff"/><rect x="14" y="17" width="4" height="1" fill="#fff"/><rect x="22" y="17" width="6" height="1" fill="#fff"/><rect x="4" y="18" width="6" height="1" fill="#fff"/><rect x="14" y="18" width="4" height="1" fill="#fff"/><rect x="22" y="18" width="6" height="1" fill="#fff"/><rect x="4" y="19" width="24" height="1" fill="#fff"/><rect x="4" y="20" width="24" height="1" fill="#fff"/><rect x="4" y="21" width="24" height="1" fill="#fff"/><rect x="5" y="22" width="5" height="1" fill="#fff"/><rect x="13" y="22" width="6" height="1" fill="#fff"/><rect x="22" y="22" width="5" height="1" fill="#fff"/><rect x="7" y="23" width="4" height="1" fill="#fff"/><rect x="21" y="23" width="4" height="1" fill="#fff"/><rect x="9" y="24" width="2" height="1" fill="#fff"/><rect x="21" y="24" width="2" height="1" fill="#fff"/></svg></a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span>V1.0.0</span><span>VB6 SP6</span><span>Win32</span></div>
+</section>
+
+<!-- FEATURES -->
+<section class="win" id="features" aria-labelledby="f-t">
+  <div class="title"><img src="assets/icons/features16.png" alt=""><span id="f-t">What it does</span><div class="cap" aria-hidden="true"><i class="m"></i><i class="x"></i></div></div>
+  <div class="body">
+    <fieldset><legend>Options</legend>
+    <div class="feat">
+      <label><span class="chk sunken"></span><span><b>Direct Replacement</b>The <b>Linker</b> takes the place of <b>LINK.EXE</b>, so its window appears whenever VB6 creates an EXE or DLL.</span></label>
+      <label><span class="chk sunken"></span><span><b>Embed MSVBVM60.DLL</b><b>VBStatic</b> fuses the VB6 runtime into your program. Nothing to install or register on the target PC.</span></label>
+      <label><span class="chk sunken"></span><span><b>Call external symbols</b><b>VBExtern</b> turns marked <code class="vb">Declare</code> statements into linker externs (like <code class="vb">extern "C"</code>), so you can link C objects and libs.</span></label>
+      <label><span class="chk sunken"></span><span><b>Build DLLs</b>Make <b>ActiveX</b> or <b>Standard DLLs</b>. For standard DLLs, you can select which functions will be exported.</span></label>
+      <label><span class="chk sunken"></span><span><b>Embed a manifest</b><b>VBMF</b> embeds an application manifest directly into the <code>main.obj</code> file.</span></label>
+      <label><span class="chk sunken"></span><span><b>Replace the icon</b><b>VBIcon</b> swaps the VB6 default icon for a multi-size set from a PNG, JPG, BMP or ICO, or removes it.</span></label>
+      <label><span class="chk sunken"></span><span><b>Build configs</b>Save different settings as named configs, such as one for debug and one for release, and switch between them from a list.</span></label>
+      <label><span class="chk sunken"></span><span><b>Easy Install</b>An automated installer sets up everything you need!</span></label>
+    </div>
+    </fieldset>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section class="win" id="gallery" aria-labelledby="s-t">
+  <div class="title"><img src="assets/icons/gallery16.png" alt=""><span id="s-t">Gallery</span><div class="cap" aria-hidden="true"><i class="m"></i><i class="x"></i></div></div>
+  <div class="gallery" role="group" aria-label="Image gallery">
+    <button type="button" class="btn arrow prev" id="g-prev" aria-label="Previous image" disabled><i></i></button>
+    <div class="stage sunken designer loading" id="g-stage" aria-busy="true">
+      <img class="pic" id="g-img" alt="">
+      <div class="msg" id="g-load" role="status"><img class="drum" src="assets/drum.gif" width="128" height="128" alt="Loading"></div>
+      <div class="msg" id="g-empty" hidden><b>No images found.</b><span>Add numbered images to <code>assets/gallery/</code>: <code>1.png</code>, <code>2.png</code>, <code>3.png</code> and so on.</span></div>
+    </div>
+    <button type="button" class="btn arrow next" id="g-next" aria-label="Next image" disabled><i></i></button>
+  </div>
+  <div class="status" aria-live="polite"><span id="g-name">Loading gallery…</span><span id="g-count"></span></div>
+</section>
+
+<section class="win" id="tools" aria-labelledby="tools-t">
+  <div class="title"><img src="assets/icons/tools16.png" alt=""><span id="tools-t">Tools</span><div class="cap" aria-hidden="true"><i class="m"></i><i class="x"></i></div></div>
+  <div class="body">
+    <p style="margin-top:0">The <b>Linker</b> and the four patch tools are separate programs. The installer sets them up, and each patch tool also runs from the command line.</p>
+    <div class="tabs" role="tablist" aria-label="Tools">
+      <button role="tab" aria-selected="true" aria-controls="p1" id="b1"><img src="assets/icons/linker-32.png" alt="" width="16" height="16">Linker</button><button role="tab" aria-selected="false" aria-controls="p2" id="b2" tabindex="-1"><img src="assets/icons/vbstatic-32.png" alt="" width="16" height="16">VBStatic</button><button role="tab" aria-selected="false" aria-controls="p3" id="b3" tabindex="-1"><img src="assets/icons/vbmf-32.png" alt="" width="16" height="16">VBMF</button><button role="tab" aria-selected="false" aria-controls="p4" id="b4" tabindex="-1"><img src="assets/icons/vbicon-32.png" alt="" width="16" height="16">VBIcon</button><button role="tab" aria-selected="false" aria-controls="p5" id="b5" tabindex="-1"><img src="assets/icons/vbextern-32.png" alt="" width="16" height="16">VBExtern</button>
+    </div>
+    <div class="panel" role="tabpanel" id="p1" aria-labelledby="b1">
+      <h2><img src="assets/icons/linker-32.png" alt="" width="32" height="32">Linker</h2>
+      <p>The front end you see. VB6 starts it instead of <b>LINK.EXE</b>, and it runs the other tools in order before handing over to the real linker, <code>LINK2.EXE</code>.</p>
+      <dl>
+        <dt>General</dt><dd>Picks <code>main.obj</code> (auto-detected as the object that defines <code>___vbaS</code>), the build options, the manifest settings and the list of link arguments, which you can select, add, reorder or load from a file.</dd>
+        <dt>DLL</dt><dd>Only for DLL builds. Choose ActiveX or standard, filter the function list, pick the exports and create the .DEF file, or let it regenerate on every compile.</dd>
+        <dt>Icon</dt><dd>Only for EXE builds. Choose the image, the sizes from 256 down to 16 pixels and the colour depths, or remove the icon.</dd>
+        <dt>Info</dt><dd>Shows which steps will run and whether each tool is found.</dd>
+        <dt>Compile</dt><dd>Runs every step, including the link.</dd>
+        <dt>Copy commands</dt><dd>Copies the commands it would run, without running them.</dd>
+        <dt>Create OBJs</dt><dd>Runs every step except the link, then renames the OBJs to <code>name_sav.obj</code> so VB6 can't delete them after the build.</dd>
+        <dt>Run in CMD</dt><dd>Runs the steps in a console window.</dd>
+        <dt>Configs</dt><dd>Configs live in <code>vblinker.ini</code> in the project directory. Tool paths live in <code>vblinker.ini</code> in the /VB98/ direcotry next to the <b>Linker</b>.</dd>
+      </dl>
+    </div>
+    <div class="panel" role="tabpanel" id="p2" aria-labelledby="b2" hidden>
+      <h2><img src="assets/icons/vbstatic-32.png" alt="" width="32" height="32">VBStatic</h2>
+      <p>Embeds <b>MSVBVM60.DLL</b> into the main OBJ, so the result is one object with the whole VB runtime inside. It works for EXEs, ActiveX DLLs and Standard DLLs.</p>
+<pre class="console">VBStatic.exe msvbvm60.dll main.obj [/DLL:ACTIVEX | /DLL:STANDARD] [/NOICON] [/OUT:file]</pre>
+      <dl>
+        <dt>Code</dt><dd>The runtime's code sections are merged into one, its relocations become COFF relocations, and its imports are rebuilt so the linker writes the import table for your EXE.</dd>
+        <dt>Entry</dt><dd>A new entry point calls the runtime's <code>DllMain</code> and then jumps to your project's own entry, <code>___vbaS</code>.</dd>
+        <dt>Resources</dt><dd>The runtime's string tables, type libraries and version data are merged in. Yours win when names clash.</dd>
+        <dt>/NOICON</dt><dd>Prevents the runtime's icons from becoming the Explorer icon. However they need to stay in the file because the runtime needs them</dd>
+        <dt>/DLL:ACTIVEX</dt><dd>Keeps DllGetClassObject, DllRegisterServer and the other ActiveX exports.</dd>
+        <dt>/DLL:STANDARD</dt><dd>Removes the ActiveX exports so you can export your own, for example with <code>/EXPORT:foo</code>.</dd>
+      </dl>
+      <p style="margin-top:10px">Linking the result needs no default libraries: <code>/NODEFAULTLIB</code> with entry <code>_VBStaticEntry</code> for an EXE, or <code>_VBStaticDllEntry@12</code> for a DLL. The <b>Linker</b>'s "Adjust link args" option sets this for you.</p>
+    </div>
+    <div class="panel" role="tabpanel" id="p3" aria-labelledby="b3" hidden>
+      <h2><img src="assets/icons/vbmf-32.png" alt="" width="32" height="32">VBMF</h2>
+      <p>Embeds an application manifest into the main OBJ as an <code>RT_MANIFEST</code> resource. The <b>Linker</b> writes the manifest for you from the General tab and reads your program's name and version from its ressources.</p>
+<pre class="console">VBMF.exe main.obj main.exe.manifest [/ID:n] [/OUT:file]</pre>
+      <dl>
+        <dt>/ID:1</dt><dd>Manifest for an EXE. (Default)</dd>
+        <dt>/ID:2</dt><dd>Manifest for a DLL.</dd>
+        <dt>Re-running</dt><dd>A manifest with the same ID is replaced. Icons, version info and other resources are kept, and <b>VBMF</b> and <b>VBStatic</b> can run in either order.</dd>
+      </dl>
+    </div>
+    <div class="panel" role="tabpanel" id="p4" aria-labelledby="b4" hidden>
+      <h2><img src="assets/icons/vbicon-32.png" alt="" width="32" height="32">VBIcon</h2>
+      <p>Replaces the default icon that VB6 writes into the main OBJ. Everything else is kept untouched, including your own icons, version info, manifests and the rest of the resources.</p>
+<pre class="console">VBIcon.exe main.obj icon.png [/RES:256,48,32] [/DEPTH:32,8,4] [/STRETCH] [/OUT:file]
+VBIcon.exe main.obj [/REMOVE]
+VBIcon.exe main.obj [/LIST]</pre>
+      <dl>
+        <dt>Input</dt><dd>JPEG, PNG, BMP or ICO.</dd>
+        <dt>/RES</dt><dd>Sizes from 256, 128, 64, 48, 32 and 16. By default every size up to the smaller side of your image.</dd>
+        <dt>/DEPTH</dt><dd>1, 4, 8, 24 or 32 bit. The 256 pixel size at 32 bit is stored PNG-compressed.</dd>
+        <dt>Quality</dt><dd>Smooth bicubic scaling, transparency kept, and error-diffusion dithering for the low colour depths.</dd>
+        <dt>/STRETCH</dt><dd>Ignores the aspect ratio. By default the image is fitted with transparent bars.</dd>
+        <dt>/REMOVE</dt><dd>Deletes the VB6 icon and adds nothing. Use "Create empty icon resource" in the <b>Linker</b> when <b>VBStatic</b> is also on.</dd>
+      </dl>
+    </div>
+    <div class="panel" role="tabpanel" id="p5" aria-labelledby="b5" hidden>
+      <h2><img src="assets/icons/vbextern-32.png" alt="" width="32" height="32">VBExtern</h2>
+      <p>VB6 builds a small stub for every <code class="vb">Declare</code>. Conveniently VB6 writes all stubs into the main OBJ. <b>VBExtern</b> rewrites the ones that use the library name <code class="vb">&lt;extern&gt;</code> into a direct jump to a symbol the linker resolves, so you can link C code compiled elsewhere.</p>
+<pre class="sunken"><span class="kw">Private Declare Function</span> foo <span class="kw">Lib</span> <span class="str">"&lt;extern&gt;"</span> <span class="kw">Alias</span> <span class="str">"bar" </span>(<span class="kw">ByVal</span> a <span class="kw">As Long</span>, <span class="kw">ByVal</span> b <span class="kw">As Long</span>) <span class="kw">As Long</span></pre>
+        <p>Is equivalent to:</p>
+<pre class="sunken"><span class="kw">extern</span> <span class="str">"C"</span> <span class="kw">int</span> <span class="kw">__attribute__</span>((stdcall)) foo(<span class="kw">int</span> a, <span class="kw">int</span> b) <span class="kw">asm</span>(<span class="str">"_bar"</span>);</pre>
+<pre class="console">VBExtern.exe main.obj [/OUT:file] [/LIST] [/PLACEHOLDER:name] [/PREFIX:]</pre>
+      <dl>
+        <dt>Symbol</dt><dd>A prefix (default <code>"_"</code>) plus the alias, or the declared name if there is no alias.</dd>
+        <dt>/LIST</dt><dd>Only lists the <code class="vb">Declare</code> statements.</dd>
+        <dt>/PLACEHOLDER:name</dt><dd>Uses <code class="vb">Lib "name"</code> name as the marker. (default <code>"&#60;extern&#62;"</code>)</dd>
+        <dt>/PREFIX:</dt><dd>Sets a different symbol prefix or removes it entirely. (default <code>"_"</code>)</dd>
+        <dt>/OUT:file</dt><dd>Writes a new file instead of patching in place.</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<section class="win" id="pipeline" aria-labelledby="pipeline-t">
+  <div class="title"><img src="assets/icons/pipeline16.png" alt=""><span id="pipeline-t">How a build runs</span><div class="cap" aria-hidden="true"><i class="m"></i><i class="x"></i></div></div>
+  <div class="body">
+    <p style="margin-top:0">In VB6, make your EXE or DLL as usual. VB6 starts the <b>Linker</b>, and its window opens with your last settings. When you press <b>Compile</b>, the steps you selected run in this order on the one main OBJ:</p>
+    <ol style="margin:0 0 10px;padding-left:22px"><li><b>VBExtern</b>: Turns <code class="vb">Declare</code> statements that use <code class="vb">&lt;extern&gt;</code> into linker externs.</li><li><b>VBIcon</b>: Replaces or removes the VB6 icon.</li><li><b>VBStatic</b>: Fuses the VB runtime into the main OBJ.</li><li><b>VBMF</b>: Embeds the manifest.</li><li><b>LINK2.EXE</b>: The real linker produces your EXE or DLL.</li></ol>
+    <p style="margin-bottom:0">The tools patch the OBJ in memory without temporary files. A pristine copy is kept, so if a step fails the OBJ is put back and you can fix the problem and press Compile again.</p>
+  </div>
+  <div class="status"><span>Steps you leave unselected are skipped.</span></div>
+</section>
+
+<!-- GET STARTED -->
+<section class="win" id="start" aria-labelledby="g-t">
+  <div class="title"><img src="assets/icons/setup16.png" alt=""><span id="g-t">VB6 LinkAlchemy Setup</span><div class="cap" aria-hidden="true"><i class="m"></i><i class="x"></i></div></div>
+  <div class="body">
+    <div class="setup">
+      <img class="sunken" src="assets/logo.png" alt="">
+      <div>
+        <h2 style="font:bold 16px var(--ui);margin:0 0 6px">Install in three steps</h2>
+        <ol style="margin:0 0 10px;padding-left:22px">
+          <li>Download the setup program from the latest GitHub release.</li>
+          <li>Run it. Everything you need is installed automatically.</li>
+          <li>In VB6, make your EXE or DLL. The <b>Linker</b> opens by itself: check the options and press <b>Compile</b>.</li>
+        </ol>
+        <fieldset><legend>Tools included</legend>
+          <p style="margin:0"><b>Linker</b>, <b>VBStatic</b>, <b>VBMF</b>, <b>VBIcon</b> and <b>VBExtern</b>.</p>
+        </fieldset>
+      </div>
+    </div>
+    <div class="setup-btns">
+      <a class="btn def" href="https://github.com/YOUR-USER/VB6-LinkAlchemy/releases/latest">Download from GitHub</a>
+      <a class="btn" href="https://github.com/YOUR-USER/VB6-LinkAlchemy/issues">Report a bug</a>
+    </div>
+  </div>
+  <div class="status"><span>VB6 LinkAlchemy</span><span>MIT License</span></div>
+</section>
+
+<!-- FAQ -->
+<section class="win" id="faq" aria-labelledby="faq-t">
+  <div class="title"><img src="assets/icons/faq16.png" alt=""><span id="faq-t">FAQ</span><div class="cap" aria-hidden="true"><i class="m"></i><i class="x"></i></div></div>
+  <div class="body faq">
+    <details><summary>Does my program still need MSVBVM60.DLL?</summary><div class="sunken"><p>No, not when you embed it. <b>VBStatic</b> fuses the runtime into your EXE or DLL, so the target PC needs no VB6 runtime.</p></div></details>
+    <details><summary>Why does a window open when I make my EXE?</summary><div class="sunken"><p>The <b>Linker</b> takes the place of <b>LINK.EXE</b>. VB6 starts it, it runs the tools you selected, and then it hands over to the real linker, <b>LINK2.EXE</b>.</p></div></details>
+    <details><summary>What happens if a step fails?</summary><div class="sunken"><p>The tools patch the OBJ in memory and keep an untouched copy. If a step fails, the OBJ is put back, so you can fix the problem and press Compile again.</p></div></details>
+    <details><summary>Where are my settings saved?</summary><div class="sunken"><p>Build configs are stored in <code>vblinker.ini</code> in the folder of <code>main.obj</code>. Tool paths are stored in <code>vblinker.ini</code> next to the <b>Linker</b>. The Tools menu changes them.</p></div></details>
+    <details><summary>Why do my OBJ files disappear after a build?</summary><div class="sunken"><p>VB6 deletes them when it finishes. <b>Create OBJs</b> runs every step except the link, then renames each OBJ to <code>name_sav.obj</code> so they stay on disk.</p></div></details>
+    <details><summary>Can I make DLLs?</summary><div class="sunken"><p>Yes. Both ActiveX DLLs and standard DLLs work. For a standard DLL you choose which functions to export and the .DEF file is created for you.</p></div></details>
+    <details><summary>Can I call C code from VB6?</summary><div class="sunken"><p>Yes. Use <code class="vb">Declare</code> with the library name <code class="vb">&lt;extern&gt;</code>. <b>VBExtern</b> turns it into a linker symbol that resolves against any OBJ or LIB you link in.</p></div></details>
+    <details><summary>Can I use the tools without the Linker?</summary><div class="sunken"><p>Yes. <b>VBStatic</b>, <b>VBMF</b>, <b>VBIcon</b> and <b>VBExtern</b> are separate programs that you can run from a console. See the Tools section for the syntax.</p></div></details>
+  </div>
+</section>
+
+<footer>VB6 LinkAlchemy is an independent project and is not affiliated with Microsoft. Visual Basic and Windows are trademarks of Microsoft Corporation.</footer>
+</main>
+
+
+<div class="taskbar" id="taskbar" hidden role="toolbar" aria-label="Minimized windows"></div>
+
+<!-- LIGHTBOX -->
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-labelledby="lb-t">
+  <div class="win">
+    <div class="title"><img src="assets/icons/gallery16.png" alt=""><span id="lb-t">Image</span><div class="cap"><i class="x" id="lb-x" role="button" tabindex="0" aria-label="Close"></i></div></div>
+    <div class="lb-view sunken designer" id="lb-view"><img id="lb-img" alt=""></div>
+    <div class="status"><span>Click image to zoom. Esc to close.</span><span id="lb-count"></span></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('[role=tab]'));
+  function show(t){
+    tabs.forEach(function(b){
+      var on=b===t;
+      b.setAttribute('aria-selected',on);
+      b.tabIndex=on?0:-1;
+      document.getElementById(b.getAttribute('aria-controls')).hidden=!on;
+    });
+    t.focus();
+  }
+  tabs.forEach(function(b,i){
+    b.addEventListener('click',function(){show(b)});
+    b.addEventListener('keydown',function(e){
+      if(e.key==='ArrowRight')show(tabs[(i+1)%tabs.length]);
+      if(e.key==='ArrowLeft')show(tabs[(i+tabs.length-1)%tabs.length]);
+    });
+  });
+})();
+
+(function(){
+  var MIN_MS=800;
+  var stage=document.getElementById('g-stage'),img=document.getElementById('g-img'),
+      prev=document.getElementById('g-prev'),next=document.getElementById('g-next'),
+      nameEl=document.getElementById('g-name'),countEl=document.getElementById('g-count'),
+      emptyEl=document.getElementById('g-empty'),loadEl=document.getElementById('g-load');
+  var files=[],cur=0,token=0;
+
+  // finds assets/gallery/1.png, 2.png, 3.png ... and stops at the first number that is missing
+  function findImages(){
+    var out=[];
+    return new Promise(function(done){
+      (function probe(n){
+        var url='assets/gallery/'+n+'.png',p=new Image();
+        p.onload=function(){out.push({url:url,name:n+'.png'});probe(n+1)};
+        p.onerror=function(){done(out)};
+        p.src=url;
+      })(1);
+    });
+  }
+
+  function setBusy(on){
+    stage.classList.toggle('loading',on);
+    stage.setAttribute('aria-busy',on);
+    loadEl.hidden=!on;
+  }
+  function show(i,minMs){
+    var my=++token,f=files[i];
+    setBusy(true);
+    var wait=new Promise(function(r){setTimeout(r,minMs)});
+    var load=new Promise(function(r){
+      var p=new Image();
+      p.onload=function(){r(true)};
+      p.onerror=function(){r(false)};
+      p.src=f.url;
+    });
+    Promise.all([wait,load]).then(function(res){
+      if(my!==token)return; // a newer click took over
+      img.src=f.url;img.alt=f.name;
+      nameEl.textContent=res[1]?f.name:'Can\u2019t load '+f.name;
+      countEl.textContent=(i+1)+' / '+files.length;
+      setBusy(false);
+    });
+  }
+  function step(d){
+    if(files.length<2)return;
+    cur=(cur+d+files.length)%files.length;
+    show(cur,MIN_MS);
+  }
+  prev.addEventListener('click',function(){step(-1)});
+  next.addEventListener('click',function(){step(1)});
+  document.getElementById('gallery').addEventListener('keydown',function(e){
+    if(e.key==='ArrowLeft'){step(-1);e.preventDefault()}
+    if(e.key==='ArrowRight'){step(1);e.preventDefault()}
+  });
+
+  findImages().then(function(l){
+      files=l;
+      if(!files.length){
+        stage.classList.remove('loading');stage.classList.add('empty');
+        stage.setAttribute('aria-busy','false');
+        loadEl.hidden=true;emptyEl.hidden=false;
+        nameEl.textContent='No 1.png found in assets/gallery';
+        return;
+      }
+      prev.disabled=next.disabled=files.length<2;
+      show(0,0);
+    });
+})();
+
+(function(){
+  var lb=document.getElementById('lb'),view=document.getElementById('lb-view'),
+      big=document.getElementById('lb-img'),pic=document.getElementById('g-img'),
+      title=document.getElementById('lb-t'),count=document.getElementById('lb-count'),
+      last=null;
+  function open(){
+    if(!pic.getAttribute('src'))return;
+    big.src=pic.src;big.alt=pic.alt;
+    title.textContent=pic.alt||'Image';
+    count.textContent=document.getElementById('g-count').textContent;
+    view.classList.remove('full');
+    lb.hidden=false;last=document.activeElement;
+    document.getElementById('lb-x').focus();
+  }
+  function close(){lb.hidden=true;if(last&&last.focus)last.focus()}
+  pic.addEventListener('click',open);
+  big.addEventListener('click',function(){view.classList.toggle('full')});
+  document.getElementById('lb-x').addEventListener('click',close);
+  document.getElementById('lb-x').addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){close();e.preventDefault()}});
+  lb.addEventListener('click',function(e){if(e.target===lb)close()});
+  document.addEventListener('keydown',function(e){if(!lb.hidden&&e.key==='Escape')close()});
+})();
+
+(function(){
+  var wins=[].slice.call(document.querySelectorAll('.win[id]')),
+      bar=document.getElementById('taskbar'),menu=document.getElementById('winmenu'),
+      reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches,
+      map={};
+
+  function wire(el,label,fn){
+    el.setAttribute('role','button');el.tabIndex=0;el.setAttribute('aria-label',label);el.title=label;
+    el.addEventListener('click',fn);
+    el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();fn()}});
+  }
+  function syncBar(){bar.hidden=!bar.children.length}
+
+  function setState(id,state){
+    var r=map[id];if(!r)return;
+    if(state==='open')r.el.removeAttribute('data-state');else r.el.setAttribute('data-state',state);
+    r.item.classList.toggle('off',state==='closed');
+    r.item.title=state==='closed'?'Click to reopen this window':'';
+    if(r.btn){bar.removeChild(r.btn);r.btn=null}
+    if(state==='min'){
+      var b=document.createElement('button');
+      b.type='button';b.className='tb-btn';b.title='Restore '+r.title;
+      b.innerHTML='<img alt=""><span></span>';
+      b.firstChild.src=r.icon;
+      b.lastChild.textContent=r.title;
+      b.addEventListener('click',function(){openWin(id,true)});
+      bar.appendChild(b);r.btn=b;
+    }
+    syncBar();
+  }
+  function openWin(id,scroll){
+    var r=map[id];setState(id,'open');
+    if(scroll){
+      r.el.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'});
+      r.el.tabIndex=-1;r.el.focus({preventScroll:true});
+      if(history.replaceState)history.replaceState(null,'','#'+id);
+    }
+  }
+
+  wins.forEach(function(w){
+    var id=w.id,item=menu.querySelector('[data-win="'+id+'"]');
+    if(!item)return;
+    var r=map[id]={el:w,title:w.querySelector('.title span').textContent,icon:w.querySelector('.title img').getAttribute('src'),item:item,btn:null};
+    var cap=w.querySelector('.cap');cap.removeAttribute('aria-hidden');
+    wire(cap.querySelector('.m'),'Minimize',function(){
+      setState(id,'min');if(r.btn)r.btn.focus();
+    });
+    wire(cap.querySelector('.x'),'Close',function(){
+      setState(id,'closed');item.focus();
+    });
+  });
+
+  // any in-page link to a window (menu, buttons) reopens it first if it was closed or minimised
+  document.addEventListener('click',function(e){
+    var a=e.target.closest&&e.target.closest('a[href^="#"]');
+    if(!a)return;
+    var id=a.getAttribute('href').slice(1);
+    if(!map[id])return;
+    e.preventDefault();openWin(id,true);
+  });
+})();
+</script>
+</body>
+</html>

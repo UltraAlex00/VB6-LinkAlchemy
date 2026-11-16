@@ -1,2 +1,27 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
+
+*.bas  text eol=crlf
+*.cls  text eol=crlf
+*.frm  text eol=crlf
+*.ctl  text eol=crlf
+*.dsr  text eol=crlf
+*.pag  text eol=crlf
+*.dob  text eol=crlf
+*.vbp  text eol=crlf
+*.vbg  text eol=crlf
+*.def  text eol=crlf
+*.rc   text eol=crlf
+*.ini  text eol=crlf
+*.nsi  text eol=crlf
+*.manifest text eol=crlf
+
+*.frx  binary
+*.ctx  binary
+*.dsx  binary
+*.pgx  binary
+*.dox  binary
+*.res  binary
+
+# git doesnt count this in code %
+docs/** linguist-documentation

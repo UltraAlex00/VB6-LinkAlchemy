@@ -1,0 +1,24 @@
+ text=auto eol=lf
+
+# vb6 shit
+*.vbw
+*.scc
+
+# link shit
+*.exp
+*.lib
+*.obj
+*.def
+*.exe
+*.dll
+
+# test shit
+test app/
+test dll/
+
+# history
+vbstatic/VBStatic[0-9].bas
+vbextern/VBExtern[0-9].bas
+vbicon/VBIcon[0-9].bas
+vbmf/VBMF[0-9].bas
+link/Form[0-9].bas
