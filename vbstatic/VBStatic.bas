@@ -335,23 +335,23 @@ Private Sub HInit(h As THash)
     ReDim h.k(0 To 255): ReDim h.v(0 To 255): ReDim h.u(0 To 255)
 End Sub
 
-Private Function hSlot(h As THash, ByVal key As String) As Long   'slot of key or -1
+Private Function HSlot(h As THash, ByVal key As String) As Long   'slot of key or -1
     Dim i As Long
     i = HashStr(key) And (h.cap - 1)
     Do While h.u(i) <> 0
-        If h.k(i) = key Then hSlot = i: Exit Function
+        If h.k(i) = key Then HSlot = i: Exit Function
         i = (i + 1) And (h.cap - 1)
     Loop
-    hSlot = -1
+    HSlot = -1
 End Function
 
 Private Function HHas(h As THash, ByVal key As String) As Boolean
-    HHas = (hSlot(h, key) >= 0)
+    HHas = (HSlot(h, key) >= 0)
 End Function
 
 Private Function HGet(h As THash, ByVal key As String) As Long
     Dim i As Long
-    i = hSlot(h, key)
+    i = HSlot(h, key)
     If i < 0 Then Fail "internal: key not found: " & key
     HGet = h.v(i)
 End Function
@@ -374,7 +374,7 @@ End Sub
 
 Private Sub HSet(h As THash, ByVal key As String, ByVal v As Long)
     Dim i As Long
-    i = hSlot(h, key)
+    i = HSlot(h, key)
     If i >= 0 Then h.v(i) = v: Exit Sub
     If (h.n + 1) * 2 > h.cap Then HGrow h
     i = HashStr(key) And (h.cap - 1)
@@ -1112,7 +1112,7 @@ Private Sub BuildVbrt(ByVal chainSym As String, ByVal entryName As String, ByVal
 
     '--- rebuild import directory
     Dim nameOff() As Long, ho As Long, base As Long, d As Long
-    Dim hSlot As THash: HInit hSlot
+    Dim HSlot As THash: HInit HSlot
     ReDim nameOff(1 To nImp)
     For d = 1 To nImp
         nameOff(d) = cs(sD6).data.n
@@ -1135,7 +1135,7 @@ Private Sub BuildVbrt(ByVal chainSym As String, ByVal entryName As String, ByVal
                 BPatchL cs(sD5).data, o, ho
                 AddRel sD4, o, cs(sD6).symIdx, R_DIR32NB
                 AddRel sD5, o, cs(sD6).symIdx, R_DIR32NB
-                HSet hSlot, UCase$(impDll(d)) & "|" & entName(e), o
+                HSet HSlot, UCase$(impDll(d)) & "|" & entName(e), o
             End If
         Next
         o = 20 * (d - 1)
@@ -1197,8 +1197,8 @@ Private Sub BuildVbrt(ByVal chainSym As String, ByVal entryName As String, ByVal
 
     '--- entry stub: DllMain(GetModuleHandleA(0), DLL_PROCESS_ATTACH, 0) then jmp chainSym
     Dim gm As Long
-    If Not HHas(hSlot, "KERNEL32.DLL|GetModuleHandleA") Then Fail "DLL does not import KERNEL32!GetModuleHandleA"
-    gm = HGet(hSlot, "KERNEL32.DLL|GetModuleHandleA")
+    If Not HHas(HSlot, "KERNEL32.DLL|GetModuleHandleA") Then Fail "DLL does not import KERNEL32!GetModuleHandleA"
+    gm = HGet(HSlot, "KERNEL32.DLL|GetModuleHandleA")
     If Not dllMode Then
         With cs(sE)
             BPutB .data, &H6A: BPutB .data, 0                       'push 0
