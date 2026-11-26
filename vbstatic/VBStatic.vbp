@@ -1,5 +1,6 @@
 Type=Exe
 Module=modVBStatic; VBStatic.bas
+Reference=*\G{00020430-0000-0000-C000-000000000046}#2.0#0#C:\Windows\SysWOW64\stdole2.tlb#OLE Automation
 Startup="Sub Main"
 HelpFile=""
 Title="VBStatic"
@@ -10,7 +11,7 @@ HelpContextID="0"
 CompatibleMode="0"
 MajorVer=1
 MinorVer=0
-RevisionVer=6
+RevisionVer=1
 AutoIncrementVer=0
 ServerSupportFiles=0
 CompilationType=0
@@ -28,6 +29,3 @@ Unattended=0
 Retained=0
 ThreadPerObject=0
 MaxNumberOfThreads=1
-
-[VBCompiler]
-LinkSwitches=/SUBSYSTEM:CONSOLE

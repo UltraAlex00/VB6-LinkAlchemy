@@ -73,7 +73,7 @@ Option Explicit
 '      VBAEXE6.LIB is on the link line or in the OBJ's default-lib directives).
 '==============================================================================
 
-Private Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As Long)
+Private Declare Sub CopyMemory Lib "Kernel32" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As Long)
 
 Private Declare Sub ExitProcess Lib "Kernel32" (ByVal uExitCode As Long)
 Private Declare Function AllocConsole Lib "Kernel32" () As Long
@@ -107,7 +107,7 @@ Private Type TSec
     flags As Long
     data As TBuf
     rel() As TRel
-    nrel As Long
+    nRel As Long
     relcap As Long
     symIdx As Long               '-1 = no section symbol known
     bss As Long                  'size of an uninitialised section (no raw data)
@@ -335,23 +335,23 @@ Private Sub HInit(h As THash)
     ReDim h.k(0 To 255): ReDim h.v(0 To 255): ReDim h.u(0 To 255)
 End Sub
 
-Private Function HSlot(h As THash, ByVal key As String) As Long   'slot of key or -1
+Private Function hSlot(h As THash, ByVal key As String) As Long   'slot of key or -1
     Dim i As Long
     i = HashStr(key) And (h.cap - 1)
     Do While h.u(i) <> 0
-        If h.k(i) = key Then HSlot = i: Exit Function
+        If h.k(i) = key Then hSlot = i: Exit Function
         i = (i + 1) And (h.cap - 1)
     Loop
-    HSlot = -1
+    hSlot = -1
 End Function
 
 Private Function HHas(h As THash, ByVal key As String) As Boolean
-    HHas = (HSlot(h, key) >= 0)
+    HHas = (hSlot(h, key) >= 0)
 End Function
 
 Private Function HGet(h As THash, ByVal key As String) As Long
     Dim i As Long
-    i = HSlot(h, key)
+    i = hSlot(h, key)
     If i < 0 Then Fail "internal: key not found: " & key
     HGet = h.v(i)
 End Function
@@ -374,7 +374,7 @@ End Sub
 
 Private Sub HSet(h As THash, ByVal key As String, ByVal v As Long)
     Dim i As Long
-    i = HSlot(h, key)
+    i = hSlot(h, key)
     If i >= 0 Then h.v(i) = v: Exit Sub
     If (h.n + 1) * 2 > h.cap Then HGrow h
     i = HashStr(key) And (h.cap - 1)
@@ -925,18 +925,18 @@ Private Function NewSec(ByVal nm As String, ByVal flags As Long, Optional ByVal 
 End Function
 
 Private Sub AddRel(ByVal s As Long, ByVal va As Long, ByVal sym As Long, ByVal typ As Long)
-    If cs(s).nrel >= cs(s).relcap Then
+    If cs(s).nRel >= cs(s).relcap Then
         cs(s).relcap = cs(s).relcap * 2 + 1024
-        If cs(s).nrel = 0 Then
+        If cs(s).nRel = 0 Then
             ReDim cs(s).rel(0 To cs(s).relcap - 1)
         Else
             ReDim Preserve cs(s).rel(0 To cs(s).relcap - 1)
         End If
     End If
-    cs(s).rel(cs(s).nrel).va = va
-    cs(s).rel(cs(s).nrel).sym = sym
-    cs(s).rel(cs(s).nrel).typ = typ
-    cs(s).nrel = cs(s).nrel + 1
+    cs(s).rel(cs(s).nRel).va = va
+    cs(s).rel(cs(s).nRel).sym = sym
+    cs(s).rel(cs(s).nRel).typ = typ
+    cs(s).nRel = cs(s).nRel + 1
 End Sub
 
 Private Sub Target(ByVal rva As Long, ByRef sec As Long, ByRef off As Long)
@@ -948,14 +948,29 @@ End Sub
 
 Private Sub BuildObjFile(outB As TBuf)
     Dim hdr As Long, body As TBuf, heads As TBuf
-    Dim i As Long, k As Long, dp As Long, rp As Long, o As Long
-    ' fix section-symbol aux records (length, reloc count)
+    Dim i As Long, k As Long, dp As Long, rp As Long, o As Long, n As Long, rc As Long
+    For i = 1 To csN
+        If cs(i).nRel > &HFFFF& And (cs(i).flags And &H1000000) = 0 Then 'enable IMAGE_SCN_LNK_NRELOC_OVFL
+            n = cs(i).nRel
+            ReDim Preserve cs(i).rel(0 To n)
+            For k = n - 1 To 0 Step -1
+                cs(i).rel(k + 1) = cs(i).rel(k)
+            Next
+            cs(i).rel(0).va = n + 1
+            cs(i).rel(0).sym = 0
+            cs(i).rel(0).typ = 0
+            cs(i).flags = cs(i).flags Or &H1000000
+            cs(i).nRel = n + 1
+            cs(i).relcap = n + 1
+        End If
+    Next
     For i = 1 To csN
         If cs(i).symIdx >= 0 Then
             o = cs(i).symIdx * 18 + 18
             If cs(i).bss > 0 Then BPatchL symTab, o, cs(i).bss Else BPatchL symTab, o, cs(i).data.n
-            symTab.d(o + 4) = CByte(cs(i).nrel And &HFF&)
-            symTab.d(o + 5) = CByte((cs(i).nrel And &HFF00&) \ &H100&)
+            If (cs(i).flags And &H1000000) <> 0 Then rc = &HFFFF& Else rc = cs(i).nRel
+            symTab.d(o + 4) = CByte(rc And &HFF&)
+            symTab.d(o + 5) = CByte((rc And &HFF00&) \ &H100&)
         End If
     Next
     hdr = 20 + 40 * csN
@@ -966,10 +981,9 @@ Private Sub BuildObjFile(outB As TBuf)
             BPutBytes body, cs(i).data.d, 0, cs(i).data.n
             BPad body, 4
         End If
-        If cs(i).nrel > 65534 Then Fail "Section " & cs(i).nm & " has too many relocations"
-        If cs(i).nrel > 0 Then
+        If cs(i).nRel > 0 Then
             rp = hdr + body.n
-            For k = 0 To cs(i).nrel - 1
+            For k = 0 To cs(i).nRel - 1
                 BPutL body, cs(i).rel(k).va
                 BPutL body, cs(i).rel(k).sym
                 BPutW body, cs(i).rel(k).typ
@@ -984,7 +998,11 @@ Private Sub BuildObjFile(outB As TBuf)
         BPutL heads, dp
         BPutL heads, rp
         BPutL heads, 0
-        BPutW heads, cs(i).nrel
+        If (cs(i).flags And &H1000000) = 0 Then
+            BPutW heads, cs(i).nRel
+        Else
+            BPutW heads, &HFFFF&
+        End If
         BPutW heads, 0
         BPutL heads, cs(i).flags
     Next
@@ -1012,6 +1030,11 @@ Private Sub ImportMain()
         rs = L32(ob, h + 16): rp = L32(ob, h + 20): rr = L32(ob, h + 24): nr = W16(ob, h + 32)
         If L32(ob, h + 28) <> 0 Or W16(ob, h + 34) <> 0 Then Fail "Line numbers in section " & cs(i).nm & " are not supported"
         cs(i).flags = L32(ob, h + 36)
+        If (cs(i).flags And &H1000000) <> 0 And nr = &HFFFF& And rr <> 0 Then
+            nr = L32(ob, rr) - 1                           'real count is in the first record (includes itself)
+            rr = rr + 10                                   'skip that record
+            cs(i).flags = cs(i).flags And Not &H1000000    'BuildObjFile sets it again when needed
+        End If
         cs(i).symIdx = -1
         If rp <> 0 Then BPutBytes cs(i).data, ob, rp, rs Else cs(i).bss = rs
         For k = 0 To nr - 1
@@ -1036,11 +1059,11 @@ End Sub
 '==============================================================================
 Private Sub BuildVbrt(ByVal chainSym As String, ByVal entryName As String, ByVal dllMode As Boolean)
     Dim i As Long, k As Long, e As Long, o As Long, l As Long
-    Dim iT As Long, iE As Long, iD As Long
+    Dim iT As Long, iE As Long, id As Long
 
-    iT = FindDllSec(".text"): iE = FindDllSec("ENGINE"): iD = FindDllSec(".data")
+    iT = FindDllSec(".text"): iE = FindDllSec("ENGINE"): id = FindDllSec(".data")
     codeLo = sVA(iT): codeHi = sVA(iE) + sVS(iE)
-    dVA = sVA(iD): dVS = sVS(iD)
+    dVA = sVA(id): dVS = sVS(id)
     iatRva = ddRVA(12): iatSz = ddSz(12)
     If iatSz = 0 Then Fail "DLL has no IAT directory"
 
@@ -1063,8 +1086,8 @@ Private Sub BuildVbrt(ByVal chainSym As String, ByVal entryName As String, ByVal
         CopyMemory cs(sA).data.d(sVA(e) - codeLo), dll(sRP(e)), l
     Next
     BZeros cs(sB).data, dVS
-    l = sVS(iD): If sRS(iD) < l Then l = sRS(iD)
-    CopyMemory cs(sB).data.d(0), dll(sRP(iD)), l
+    l = sVS(id): If sRS(id) < l Then l = sRS(id)
+    CopyMemory cs(sB).data.d(0), dll(sRP(id)), l
 
     '--- DLL relocations -> COFF DIR32
     Dim r As Long, sc As Long, ts As Long, toff As Long, v As Long, skipped As Long
@@ -1266,7 +1289,7 @@ Private Sub PatchMain()
     '--- IAT (.idata$5) becomes plain data: every slot is relocated straight into the embedded runtime
     Dim c5 As Long, rva As Long, nSlots As Long
     c5 = i5 + 1
-    cs(c5).nrel = 0
+    cs(c5).nRel = 0
     For k = 0 To UBound(slotOrd)
         If slotOrd(k) > 0 Then
             If slotOrd(k) - expBase < 0 Or slotOrd(k) - expBase >= expCnt Then Fail "Ordinal " & slotOrd(k) & " is not in the DLL"
@@ -1287,7 +1310,7 @@ Private Sub PatchMain()
     For j = 0 To 3
         If idxs(j) >= 0 Then
             k = idxs(j) + 1
-            cs(k).nm = ".vbnul" & digs(j): cs(k).data.n = 0: cs(k).nrel = 0: cs(k).bss = 0
+            cs(k).nm = ".vbnul" & digs(j): cs(k).data.n = 0: cs(k).nRel = 0: cs(k).bss = 0
             If cs(k).symIdx >= 0 Then SetName8 symTab, cs(k).symIdx * 18, cs(k).nm
         End If
     Next
@@ -1297,7 +1320,7 @@ Private Sub PatchMain()
         Dim c1 As Long, c2 As Long
         c1 = FindObjSec(".rsrc$01") + 1: c2 = FindObjSec(".rsrc$02") + 1
         If cs(c2).symIdx < 0 Then Fail "No section symbol for .rsrc$02 in the OBJ"
-        cs(c1).data.n = 0: BPutBytes cs(c1).data, rsr01.d, 0, rsr01.n: cs(c1).nrel = 0
+        cs(c1).data.n = 0: BPutBytes cs(c1).data, rsr01.d, 0, rsr01.n: cs(c1).nRel = 0
         For k = 0 To rsrRel.n \ 4 - 1
             AddRel c1, BGetL(rsrRel, k * 4), cs(c2).symIdx, R_DIR32NB
         Next
