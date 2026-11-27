@@ -13,8 +13,10 @@
 # test projects
 test app/
 test dll/
+bug/
 
 *.lnk
+*.ps1
 
 # backups
 vbstatic/VBStatic[0-9]*.bas

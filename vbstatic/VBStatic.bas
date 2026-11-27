@@ -146,6 +146,8 @@ Private ddRVA(0 To 15) As Long, ddSz(0 To 15) As Long
 Private expBase As Long, expCnt As Long
 Private expRva() As Long, expName() As String
 Private hNames As THash                      'export name -> ordinal
+Private dllPathArg As String                 'the DLL path as given on the command line
+Private dllSelfName As String                'the DLL's own module name, from its export directory (e.g. "MSVBVM60.DLL")
 Private nImp As Long
 Private impDll(1 To 64) As String, impFT(1 To 64) As Long, impFirst(1 To 64) As Long, impCnt(1 To 64) As Long
 Private nEnt As Long
@@ -286,14 +288,11 @@ Private Function W16(a() As Byte, ByVal off As Long) As Long
 End Function
 
 Private Function CStrAt(a() As Byte, ByVal off As Long, Optional ByVal maxLen As Long = 4096) As String
-    Dim i As Long, s As String
-    i = off
-    Do While i < off + maxLen
-        If a(i) = 0 Then Exit Do
-        s = s & Chr$(a(i))
-        i = i + 1
-    Loop
-    CStrAt = s
+    Dim i As Long
+    For i = off To off + maxLen
+        If a(i) = 0 Then Exit For
+        CStrAt = CStrAt & ChrW$(a(i))
+    Next
 End Function
 
 Private Function ReadAll(ByVal path As String) As Byte()
@@ -384,10 +383,6 @@ Private Sub HSet(h As THash, ByVal key As String, ByVal v As Long)
     h.k(i) = key: h.v(i) = v: h.u(i) = 1: h.n = h.n + 1
 End Sub
 
-'==============================================================================
-' console output (works with the GUI subsystem - own console window - and with a
-' console-subsystem build, see MakeConsole.cmd)
-'==============================================================================
 Private Sub ConInit()
     Dim mode As Long
     ownConsole = (AllocConsole() <> 0)             'fails when a console already exists (console subsystem)
@@ -440,6 +435,7 @@ End Function
 
 Private Sub LoadDll(ByVal path As String)
     Dim pe As Long, opt As Long, osz As Long, i As Long, h As Long
+    dllPathArg = path
     dll = ReadAll(path)
     If W16(dll, 0) <> &H5A4D Then Fail "Not an MZ file: " & path
     pe = L32(dll, &H3C)
@@ -463,6 +459,7 @@ Private Sub LoadDll(ByVal path As String)
     Dim eo As Long, nf As Long, nn As Long, af As Long, an As Long, ao As Long, nm As String, idx As Long
     If ddSz(0) = 0 Then Fail "DLL has no export table"
     eo = R2O(ddRVA(0))
+    dllSelfName = CStrAt(dll, R2O(L32(dll, eo + 12)))
     expBase = L32(dll, eo + 16): nf = L32(dll, eo + 20): nn = L32(dll, eo + 24)
     af = L32(dll, eo + 28): an = L32(dll, eo + 32): ao = L32(dll, eo + 36)
     expCnt = nf
@@ -580,6 +577,41 @@ Private Function FindObjSec(ByVal nm As String) As Long
         If CStrAt(ob, 20 + i * 40, 8) = nm Then FindObjSec = i: Exit Function
     Next
     FindObjSec = -1
+End Function
+
+'a compiled OBJ can hold more than one .idata$2/3/4/5/6 group when it imports from more than
+'one DLL (e.g. one for the embedded runtime, one more for every DLL declared in TypeLibs)
+Private Function FindAllObjSec(ByVal nm As String, idxs() As Long) As Long
+    Dim i As Long, n As Long
+    For i = 0 To oNs - 1
+        If CStrAt(ob, 20 + i * 40, 8) = nm Then idxs(n) = i: n = n + 1
+    Next
+    FindAllObjSec = n
+End Function
+
+'raw relocation table of section secIdx0 (0-based), handling IMAGE_SCN_LNK_NRELOC_OVFL the
+'same way ImportMain does
+Private Sub GetSecRelocs(ByVal secIdx0 As Long, ByRef rp As Long, ByRef rr As Long, ByRef nr As Long)
+    Dim h As Long, flags As Long
+    h = 20 + secIdx0 * 40
+    rp = L32(ob, h + 20): rr = L32(ob, h + 24): nr = W16(ob, h + 32)
+    flags = L32(ob, h + 36)
+    If (flags And &H1000000) <> 0 And nr = &HFFFF& And rr <> 0 Then
+        nr = L32(ob, rr) - 1: rr = rr + 10
+    End If
+End Sub
+
+'raw file offset of a section's data, by its 1-based COFF section number (stored in oSec)
+Private Function SecRawPtr(ByVal secNum1 As Long) As Long
+    SecRawPtr = L32(ob, 20 + (secNum1 - 1) * 40 + 20)
+End Function
+
+Private Function BaseName(ByVal p As String) As String
+    Dim i As Long
+    For i = Len(p) To 1 Step -1
+        If Mid$(p, i, 1) = "\" Or Mid$(p, i, 1) = "/" Then BaseName = Mid$(p, i + 1): Exit Function
+    Next
+    BaseName = p
 End Function
 
 '==============================================================================
@@ -939,7 +971,7 @@ Private Sub AddRel(ByVal s As Long, ByVal va As Long, ByVal sym As Long, ByVal t
     cs(s).nRel = cs(s).nRel + 1
 End Sub
 
-Private Sub Target(ByVal rva As Long, ByRef sec As Long, ByRef off As Long)
+Private Sub target(ByVal rva As Long, ByRef sec As Long, ByRef off As Long)
     If rva >= iatRva And rva < iatRva + iatSz Then sec = sD5: off = rva - iatRva: Exit Sub
     If rva >= codeLo And rva <= codeHi Then sec = sA: off = rva - codeLo: Exit Sub
     If rva >= dVA And rva <= dVA + dVS Then sec = sB: off = rva - dVA: Exit Sub
@@ -1090,7 +1122,7 @@ Private Sub BuildVbrt(ByVal chainSym As String, ByVal entryName As String, ByVal
     CopyMemory cs(sB).data.d(0), dll(sRP(id)), l
 
     '--- DLL relocations -> COFF DIR32
-    Dim r As Long, sc As Long, ts As Long, toff As Long, v As Long, skipped As Long
+    Dim r As Long, sc As Long, ts As Long, tOff As Long, v As Long, skipped As Long
     For k = 0 To nRel - 1
         r = relRva(k)
         sc = 0
@@ -1103,8 +1135,8 @@ Private Sub BuildVbrt(ByVal chainSym As String, ByVal entryName As String, ByVal
             skipped = skipped + 1
         Else
             v = BGetL(cs(sc).data, o) - imgBase
-            Target v, ts, toff
-            BPatchL cs(sc).data, o, toff
+            target v, ts, tOff
+            BPatchL cs(sc).data, o, tOff
             AddRel sc, o, cs(ts).symIdx, R_DIR32
         End If
     Next
@@ -1261,59 +1293,227 @@ End Sub
 '==============================================================================
 ' patch the main OBJ's own sections (inside the writer)
 '==============================================================================
+Private Function RawRelSym(ByVal sec0 As Long, ByVal va As Long) As Long
+    Dim rp As Long, rr As Long, nr As Long, k As Long
+    RawRelSym = -1
+    GetSecRelocs sec0, rp, rr, nr
+    For k = 0 To nr - 1
+        If L32(ob, rr + 10 * k) = va Then RawRelSym = L32(ob, rr + 10 * k + 4): Exit Function
+    Next
+End Function
+
+'where does the relocation at (sec0, va) point? target section (0-based) and offset inside it
+'(symbol value + the addend stored at the relocation site)
+Private Function RawRelTarget(ByVal sec0 As Long, ByVal va As Long, ByRef tSec0 As Long, ByRef tOff As Long) As Boolean
+    Dim sy As Long, rp As Long
+    sy = RawRelSym(sec0, va)
+    If sy < 0 Then Exit Function
+    If oSec(sy) <= 0 Then Exit Function
+    rp = SecRawPtr(sec0 + 1)
+    tSec0 = oSec(sy) - 1
+    tOff = oVal(sy)
+    If rp <> 0 Then tOff = tOff + L32(ob, rp + va)
+    RawRelTarget = True
+End Function
+
+Private Sub DropRels(ByVal s As Long, ByVal lo As Long, ByVal hi As Long)
+    Dim k As Long, m As Long
+    For k = 0 To cs(s).nRel - 1
+        If cs(s).rel(k).va < lo Or cs(s).rel(k).va >= hi Then
+            If m <> k Then cs(s).rel(m) = cs(s).rel(k)
+            m = m + 1
+        End If
+    Next
+    cs(s).nRel = m
+End Sub
+
+'cut one 20-byte import descriptor out of an .idata$2 section (writer index s)
+Private Sub RemoveDescRecord(ByVal s As Long, ByVal pos As Long)
+    Dim k As Long, m As Long, v As Long
+    For k = pos To cs(s).data.n - 21
+        cs(s).data.d(k) = cs(s).data.d(k + 20)
+    Next
+    cs(s).data.n = cs(s).data.n - 20
+    For k = 0 To cs(s).nRel - 1
+        v = cs(s).rel(k).va
+        If v < pos Or v >= pos + 20 Then
+            cs(s).rel(m) = cs(s).rel(k)
+            If v >= pos + 20 Then cs(s).rel(m).va = v - 20
+            m = m + 1
+        End If
+    Next
+    cs(s).nRel = m
+End Sub
+
+Private Sub NullSec(ByVal k As Long, ByVal dg As String)
+    cs(k).nm = ".vbnul" & dg: cs(k).data.n = 0: cs(k).nRel = 0: cs(k).bss = 0
+    If cs(k).symIdx >= 0 Then SetName8 symTab, cs(k).symIdx * 18, cs(k).nm
+End Sub
+
+'does any entry of the thunk array at (iltSec, iltOff) point into section target?
+Private Function ILTHitsSec(ByVal iltSec As Long, ByVal iltOff As Long, ByVal target As Long) As Boolean
+    Dim n As Long, va As Long, sz As Long, rp As Long, t1 As Long, t2 As Long
+    sz = L32(ob, 20 + iltSec * 40 + 16): rp = SecRawPtr(iltSec + 1)
+    Do
+        va = iltOff + 4 * n
+        If va + 4 > sz Then Exit Do
+        If RawRelTarget(iltSec, va, t1, t2) Then
+            If t1 = target Then ILTHitsSec = True: Exit Function
+        ElseIf L32(ob, rp + va) = 0 Then
+            Exit Do
+        End If
+        n = n + 1
+    Loop
+End Function
+
 Private Sub PatchMain()
-    Dim i As Long, k As Long, off As Long, h As Long
-    Dim i2 As Long, i3 As Long, i4 As Long, i5 As Long, i6 As Long
-    i2 = FindObjSec(".idata$2"): i3 = FindObjSec(".idata$3"): i4 = FindObjSec(".idata$4"): i5 = FindObjSec(".idata$5"): i6 = FindObjSec(".idata$6")
-    If i2 < 0 Or i4 < 0 Or i5 < 0 Or i6 < 0 Then Fail "This OBJ has no .idata$2/4/5/6 sections - not a VB6 main object (the one with the runtime imports)?"
+    Dim i As Long, k As Long, off As Long, h As Long, j As Long
 
-    Dim rs4 As Long, rp4 As Long, rr4 As Long, nr4 As Long, rp6 As Long
-    h = 20 + i4 * 40: rs4 = L32(ob, h + 16): rp4 = L32(ob, h + 20): rr4 = L32(ob, h + 24): nr4 = W16(ob, h + 32)
-    rp6 = L32(ob, 20 + i6 * 40 + 20)
+    '--- collect every import descriptor of the OBJ. A compiled VB6 OBJ can hold several in ONE
+    '    .idata$2 section (20 bytes each), e.g. USER32.DLL for a TypeLib-declared SendMessageW
+    '    next to MSVBVM60.DLL, and their thunk arrays (.idata$4 / .idata$5 / hint-names .idata$6)
+    '    can be shared between them, split only by offset. So everything below works per
+    '    descriptor and per slot range, never "per section".
+    Dim idata2(0 To 63) As Long, n2 As Long
+    n2 = FindAllObjSec(".idata$2", idata2)
+    If n2 = 0 Then Fail "This OBJ has no .idata$2 section - not a VB6 main object (the one with the runtime imports)?"
 
-    '--- which export does each IAT slot stand for?
-    Dim slotOrd() As Long, va As Long, si As Long, nm As String, v As Long, symOff As Long
-    ReDim slotOrd(0 To rs4 \ 4 - 1)
-    For k = 0 To nr4 - 1
-        va = L32(ob, rr4 + 10 * k): si = L32(ob, rr4 + 10 * k + 4)
-        symOff = oVal(si) + L32(ob, rp4 + va)
-        nm = CStrAt(ob, rp6 + symOff + 2)
-        If Not HHas(hNames, nm) Then Fail "The OBJ imports '" & nm & "' which MSVBVM60.DLL does not export"
-        slotOrd(va \ 4) = HGet(hNames, nm)
+    Dim dSec(0 To 63) As Long, dPos(0 To 63) As Long, dNm(0 To 63) As String, dNmSec(0 To 63) As Long
+    Dim dIltSec(0 To 63) As Long, dIltOff(0 To 63) As Long, dIatSec(0 To 63) As Long, dIatOff(0 To 63) As Long
+    Dim nd As Long, pos As Long, sz As Long, t1 As Long, t2 As Long
+    For j = 0 To n2 - 1
+        sz = L32(ob, 20 + idata2(j) * 40 + 16)
+        For pos = 0 To sz - 20 Step 20
+            If RawRelTarget(idata2(j), pos + 12, t1, t2) Then      'a real descriptor has a Name; the terminator has none
+                If nd > 63 Then Fail "internal: too many import descriptors"
+                dSec(nd) = idata2(j): dPos(nd) = pos
+                dNmSec(nd) = t1
+                dNm(nd) = CStrAt(ob, SecRawPtr(t1 + 1) + t2)
+                dIltSec(nd) = -1: dIatSec(nd) = -1
+                If RawRelTarget(idata2(j), pos, t1, t2) Then dIltSec(nd) = t1: dIltOff(nd) = t2
+                If RawRelTarget(idata2(j), pos + 16, t1, t2) Then dIatSec(nd) = t1: dIatOff(nd) = t2
+                nd = nd + 1
+            End If
+        Next
     Next
-    For off = 0 To rs4 - 4 Step 4
-        v = L32(ob, rp4 + off)
-        If v < 0 Then slotOrd(off \ 4) = v And &HFFFF&
+    If nd = 0 Then Fail "No import descriptor with a Name found in .idata$2"
+
+    '--- which one is the embedded DLL?
+    Dim mi As Long, wantSelf As String, wantArg As String
+    wantSelf = UCase$(dllSelfName): wantArg = UCase$(BaseName(dllPathArg))
+    mi = -1
+    For j = 0 To nd - 1
+        If UCase$(dNm(j)) = wantSelf Or UCase$(dNm(j)) = wantArg Then
+            If mi >= 0 Then Fail "The OBJ imports '" & dNm(j) & "' through more than one descriptor - unexpected"
+            mi = j
+        Else
+            AddLog "keeping import group of " & dNm(j) & " (not the embedded DLL)"
+        End If
+    Next
+    If mi < 0 Then Fail "None of this OBJ's " & nd & " import descriptor(s) name " & dllSelfName & " - wrong DLL/OBJ pair?"
+    Dim iltS As Long, iltO As Long, iatS As Long, iatO As Long
+    iltS = dIltSec(mi): iltO = dIltOff(mi): iatS = dIatSec(mi): iatO = dIatOff(mi)
+    If iltS < 0 Or iatS < 0 Then Fail "The " & dllSelfName & " import descriptor has no OriginalFirstThunk/FirstThunk relocation"
+
+    '--- the embedded DLL's own slots: from its start offset up to the null terminator slot
+    Dim nSl As Long, va As Long, v As Long, iltSz As Long, iltRp As Long
+    iltSz = L32(ob, 20 + iltS * 40 + 16): iltRp = SecRawPtr(iltS + 1)
+    Do
+        va = iltO + 4 * nSl
+        If va + 4 > iltSz Then Exit Do
+        v = L32(ob, iltRp + va)
+        If v = 0 And RawRelSym(iltS, va) < 0 Then Exit Do
+        nSl = nSl + 1
+    Loop
+    If nSl = 0 Then Fail "The " & dllSelfName & " import descriptor has no imports"
+
+    '--- which export does each of those slots stand for?
+    Dim slotOrd() As Long, nm As String, tgt(0 To 63) As Long, nTgt As Long, q As Long, seen As Boolean
+    ReDim slotOrd(0 To nSl - 1)
+    tgt(0) = dNmSec(mi): nTgt = 1
+    For k = 0 To nSl - 1
+        va = iltO + 4 * k
+        If RawRelTarget(iltS, va, t1, t2) Then
+            nm = CStrAt(ob, SecRawPtr(t1 + 1) + t2 + 2)
+            If Not HHas(hNames, nm) Then Fail "The OBJ imports '" & nm & "' through " & dllSelfName & ", which does not export it"
+            slotOrd(k) = HGet(hNames, nm)
+            seen = False
+            For q = 0 To nTgt - 1
+                If tgt(q) = t1 Then seen = True
+            Next
+            If Not seen And nTgt < 64 Then tgt(nTgt) = t1: nTgt = nTgt + 1
+        Else
+            slotOrd(k) = L32(ob, iltRp + va) And &HFFFF&
+        End If
     Next
 
-    '--- IAT (.idata$5) becomes plain data: every slot is relocated straight into the embedded runtime
+    '--- IAT slots of the embedded DLL: plain data relocated straight into the embedded runtime.
+    '    Slots of other DLLs in the same section keep their import relocations.
     Dim c5 As Long, rva As Long, nSlots As Long
-    c5 = i5 + 1
-    cs(c5).nRel = 0
-    For k = 0 To UBound(slotOrd)
-        If slotOrd(k) > 0 Then
-            If slotOrd(k) - expBase < 0 Or slotOrd(k) - expBase >= expCnt Then Fail "Ordinal " & slotOrd(k) & " is not in the DLL"
-            rva = expRva(slotOrd(k) - expBase)
-            If rva < codeLo Or rva >= codeHi Then Fail "Ordinal " & slotOrd(k) & " is not exported (as code) by the DLL"
-            BPatchL cs(c5).data, k * 4, rva - codeLo
-            AddRel c5, k * 4, cs(sA).symIdx, R_DIR32
-            nSlots = nSlots + 1
-        End If
+    c5 = iatS + 1
+    DropRels c5, iatO, iatO + 4 * nSl
+    For k = 0 To nSl - 1
+        If slotOrd(k) - expBase < 0 Or slotOrd(k) - expBase >= expCnt Then Fail "Ordinal " & slotOrd(k) & " is not in the DLL"
+        rva = expRva(slotOrd(k) - expBase)
+        If rva < codeLo Or rva >= codeHi Then Fail "Ordinal " & slotOrd(k) & " is not exported (as code) by the DLL"
+        BPatchL cs(c5).data, iatO + 4 * k, rva - codeLo
+        AddRel c5, iatO + 4 * k, cs(sA).symIdx, R_DIR32
+        nSlots = nSlots + 1
     Next
-    cs(c5).nm = ".vbiat"
-    If cs(c5).symIdx >= 0 Then SetName8 symTab, cs(c5).symIdx * 18, ".vbiat"
 
-    '--- the old msvbvm60 import sections: emptied AND renamed (.vbnulN), so the linker neither
-    '    sees a second import directory nor treats the object as an import-library member
-    Dim idxs As Variant, digs As Variant, j As Long
-    idxs = Array(i2, i3, i4, i6): digs = Array("2", "3", "4", "6")
-    For j = 0 To 3
-        If idxs(j) >= 0 Then
-            k = idxs(j) + 1
-            cs(k).nm = ".vbnul" & digs(j): cs(k).data.n = 0: cs(k).nRel = 0: cs(k).bss = 0
-            If cs(k).symIdx >= 0 Then SetName8 symTab, cs(k).symIdx * 18, cs(k).nm
+    '--- who else uses the sections of this import group?
+    Dim exclIlt As Boolean, exclIat As Boolean, used As Boolean
+    exclIlt = True: exclIat = True
+    For j = 0 To nd - 1
+        If j <> mi Then
+            If dIltSec(j) = iltS Or dIatSec(j) = iltS Then exclIlt = False
+            If dIatSec(j) = iatS Or dIltSec(j) = iatS Then exclIat = False
         End If
     Next
+
+    '--- dispose of the embedded DLL's import group. Whole sections are emptied and renamed
+    '    (.vbnulN) only when nobody else uses them, so the linker neither sees a second import
+    '    directory for the runtime nor treats the object as an import-library member; sections
+    '    shared with another DLL (USER32 via TLB, ...) stay, and only the embedded DLL's slot
+    '    range inside them is cleared.
+    If exclIat Then
+        cs(c5).nm = ".vbiat"
+        If cs(c5).symIdx >= 0 Then SetName8 symTab, cs(c5).symIdx * 18, ".vbiat"
+    Else
+        AddLog "IAT section is shared with another import group - patched only the " & nSl & " " & dllSelfName & " slots in place"
+    End If
+    If exclIlt Then
+        NullSec iltS + 1, "4"
+    Else
+        DropRels iltS + 1, iltO, iltO + 4 * nSl
+        For k = 0 To nSl - 1
+            BPatchL cs(iltS + 1).data, iltO + 4 * k, 0
+        Next
+    End If
+    For q = 0 To nTgt - 1                         'hint/name + DLL name strings
+        used = False
+        For j = 0 To nd - 1
+            If j <> mi Then
+                If dNmSec(j) = tgt(q) Then used = True
+                If dIltSec(j) >= 0 Then
+                    If ILTHitsSec(dIltSec(j), dIltOff(j), tgt(q)) Then used = True
+                End If
+            End If
+        Next
+        If used Then
+            AddLog "kept section " & cs(tgt(q) + 1).nm & " (still used by another import group)"
+        ElseIf tgt(q) <> iltS And tgt(q) <> iatS Then
+            NullSec tgt(q) + 1, "6"
+        End If
+    Next
+    RemoveDescRecord dSec(mi) + 1, dPos(mi)
+    If cs(dSec(mi) + 1).data.n = 0 Then NullSec dSec(mi) + 1, "2"
+    If nd = 1 Then                                 'nothing else imports: the null terminator goes too
+        n2 = FindAllObjSec(".idata$3", idata2)
+        For j = 0 To n2 - 1
+            NullSec idata2(j) + 1, "3"
+        Next
+    End If
 
     '--- runtime resources merged into the OBJ's own resource sections
     If resMode = 1 Then
@@ -1330,7 +1530,7 @@ Private Sub PatchMain()
     '--- /DLL:STANDARD: drop every -export: directive, ActiveX entry functions become static
     If gStrip Then
         Dim stripped As THash, sk As String, dr As Long, txt As String, tok As Variant, keep As String
-        Dim nm2 As String, q As Long, newTxt As String, o As Long
+        Dim nm2 As String, newTxt As String, o As Long
         HInit stripped
         dr = FindObjSec(".drectve")
         If dr >= 0 Then

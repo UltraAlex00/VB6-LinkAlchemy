@@ -6,11 +6,11 @@ BrandingText "LinkAlchemy for VB6 Setup"
 RequestExecutionLevel admin
 
 ;info
-VIProductVersion "1.0.0.0"
+VIProductVersion "1.1.0.0"
 VIAddVersionKey "ProductName" "LinkAlchemy"
 VIAddVersionKey "LegalCopyright" "Copyright © 2026"
 VIAddVersionKey "FileDescription" "LinkAlchemy for VB6 - Setup"
-VIAddVersionKey "FileVersion" "1.0.0"
+VIAddVersionKey "FileVersion" "1.1.0"
 
 ;style
 !define MUI_ICON "icon.ico"
